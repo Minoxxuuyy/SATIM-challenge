@@ -69,7 +69,7 @@ def register_routes(app):
             relevant_chunks = [documents[idx] for idx, _ in results]
             relevant_metadata = [policy_metadata[idx] for idx, _ in results]
 
-            analysis = analyze_compliance(use_case, relevant_chunks)
+            analysis = analyze_compliance(use_case, relevant_chunks,relevant_metadata)
             analysis["source_policies"] = defaultdict(list)
             for meta in relevant_metadata:
                 analysis["source_policies"][meta["policy"]].append({

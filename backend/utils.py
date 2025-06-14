@@ -11,6 +11,7 @@ import re
 from typing import List, Dict, Tuple
 from sentence_transformers import SentenceTransformer, util
 import google.generativeai as genai
+from collections import defaultdict
 
 documents = []
 policy_metadata = []
@@ -80,14 +81,37 @@ def search_vector_store(query: str, k: int = 5):
     distances, indices = vector_store.search(query_embedding.astype('float32'), k)
     return [(int(i), float(d)) for i, d in zip(indices[0], distances[0])]
 
-def analyze_compliance(use_case: str, relevant_chunks: List[str]) -> Dict:
-    context = "\n\n".join([f"Policy Excerpt {i+1}:\n{chunk}" for i, chunk in enumerate(relevant_chunks)])
+def analyze_compliance(use_case: str, relevant_chunks: List[str], relevant_metadata: List[Dict]) -> Dict:
+    policy_chunks_map = defaultdict(list)
+    for chunk, meta in zip(relevant_chunks, relevant_metadata):
+        policy_name = meta.get("policy", "Unknown Policy")
+        policy_chunks_map[policy_name].append(chunk)
+    formatted_policies = "\n\n".join(
+        f"Policy Name: {name}\n" + "\n\n".join(chunks)
+        for name, chunks in policy_chunks_map.items()
+    )
     prompt = f"""
-    You are a compliance analyst. Based on the following policy excerpts and use case:
-    1. Assign KPI score (0-1) per policy.
-    2. Identify compromised aspects.
-    3. Recommend fixes.
-    Use Case:\n{use_case}\nPolicies:\n{context}
+    You are a compliance analyst. Based on the following **policy excerpts** and a real-life **use case**, perform the following:
+
+    1. Assign a **KPI compliance score (from 0.0 to 1.0)** for **each policy** individually.
+    2. Briefly explain **what was compromised** in the use case compared to each policy.
+    3. Provide **2–3 actionable recommendations** to improve compliance.
+
+    Respond ONLY using this format:
+
+    Compliance Results:
+    - [Policy Name]: KPI Score = [score] - [What was compromised]
+
+    Recommendations:
+    - [Recommendation 1]
+    - [Recommendation 2]
+    ...
+
+    Use Case:
+    {use_case}
+
+    Policies:
+    {formatted_policies}
     """
     response = gemini_model.generate_content(prompt)
     return parse_gemini_response(response.text)
